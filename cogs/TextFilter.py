@@ -152,20 +152,12 @@ class TextFilterCog(commands.Cog):
             censor_list = self.tf_database_manager.get_filtered_text_for_guild(message.guild.id)
             if (any(map(message.content.__contains__, censor_list))):
                 await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" has been deleted by KoalaBot.")
-                #await message.author.send(message.channel.mention)
-                channels = self.tf_database_manager.get_mod_channel(message.guild.id)
-                if (len(channels) > 0):
-                    for each in channels:
-                        channel = self.bot.get_channel(id=int(each[0]))
-                        embed = discord.Embed()
-                        embed.colour = KOALA_GREEN
-                        embed.title = "Koala Moderation - Message Deleted"
-                        embed.add_field(name="Reason",value="Contained banned word")
-                        embed.add_field(name="User",value=message.author.mention)
-                        embed.add_field(name="Channel",value=message.channel.mention)
-                        embed.add_field(name="Message",value=message.content)
-                        await channel.send(embed=embed)
+                await sendToModerationChannels(message, self)
                 await message.delete()
+
+
+
+
 
 def setup(bot: KoalaBot) -> None:
     """
@@ -173,6 +165,27 @@ def setup(bot: KoalaBot) -> None:
     :param  bot: The client of the KoalaBot
     """
     bot.add_cog(TextFilterCog(bot))
+
+def isModerationChannelAvailable(guild_id, self):
+    channels = self.tf_database_manager.get_mod_channel(guild_id)
+    return len(channels) > 0
+
+async def sendToModerationChannels(message, self):
+    if (isModerationChannelAvailable(message.guild.id, self)):
+        channels = self.tf_database_manager.get_mod_channel(message.guild.id)
+        for each_chan in channels:
+            channel = self.bot.get_channel(id=int(each_chan[0]))
+            await channel.send(embed=buildModerationEmbed(message))
+
+def buildModerationEmbed(message):
+    embed = discord.Embed()
+    embed.colour = KOALA_GREEN
+    embed.title = "Koala Moderation - Message Deleted"
+    embed.add_field(name="Reason",value="Contained banned word")
+    embed.add_field(name="User",value=message.author.mention)
+    embed.add_field(name="Channel",value=message.channel.mention)
+    embed.add_field(name="Message",value=message.content)
+    return embed
 
 class TextFilterDBManager:
     """

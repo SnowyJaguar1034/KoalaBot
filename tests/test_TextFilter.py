@@ -79,5 +79,21 @@ async def test_list_filtered_words():
     assert_embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
     assert_embed.add_field(name="Banned Words", value="listing1\nlisting2\n")
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "check_filtered_words")
+    # to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
     dpytest.verify_embed(embed=assert_embed)
 
+@pytest.mark.asyncio()
+async def test_add_new_mod_channel():
+    channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
+    dpytest.get_config().channels.append(channel)
+
+    assert_embed = discord.Embed()
+    assert_embed.title = "Added Moderation Channel"
+    assert_embed.colour = KOALA_GREEN
+    assert_embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
+    assert_embed.add_field(name="Channel Name", value=channel.mention)
+    assert_embed.add_field(name="Channel IDs", value=str(channel.id))
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+str(channel.id))
+    # to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
+    dpytest.verify_embed(embed=assert_embed)
