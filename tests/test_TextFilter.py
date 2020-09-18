@@ -30,6 +30,7 @@ base_cog = None
 tf_cog = None
 utils_cog =  None
 
+# to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
 
 def setup_function():
     """ setup any state specific to the execution of the given module."""
@@ -45,19 +46,62 @@ def setup_function():
     dpytest.configure(bot)
     print("Tests starting")
 
+def assertWarning(word):
+    dpytest.verify_message("*"+word+"* has been filtered.")
+    dpytest.verify_message("Watch your language! Your message: '*k!filter_word "+word+"*' in "+dpytest.get_config().guilds[0].channels[0].mention +" has been deleted by KoalaBot.")
+
+def createNewModChannelEmbed(channel):
+    embed = discord.Embed()
+    embed.title = "Koala Moderation - Mod Channel Added"
+    embed.colour = KOALA_GREEN
+    embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
+    embed.add_field(name="Channel Name", value=channel.mention)
+    embed.add_field(name="Channel IDs", value=str(channel.id))
+    return embed
+
+def listModChannelEmbed(channels):
+    embed = discord.Embed()
+    embed.title = "Koala Moderation - Mod Channels"
+    embed.colour = KOALA_GREEN
+    embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
+    for channel in channels:
+        embed.add_field(name="Name & Channel ID", value=channel.mention + " " + str(channel.id))
+    return embed
+
+def removeModChannelEmbed(channel):
+    embed = discord.Embed()
+    embed.title = "Koala Moderation - Mod Channel Removed"
+    embed.colour = KOALA_GREEN
+    embed.add_field(name="Name", value=channel.mention)
+    embed.add_field(name="ID", value=str(channel.id))
+    return embed
+
+def createFilteredWordString(words):
+    createWordString = ""
+    for word in words:
+        createWordString+=word+"\n"
+    return createWordString
+
+def filteredWordsEmbed(words):
+    wordString = createFilteredWordString(words)
+    embed = discord.Embed()
+    embed.title = "Koala Moderation - Filtered Words"
+    embed.colour = KOALA_GREEN
+    embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
+    embed.add_field(name="Banned Words", value=wordString)
+    return embed
+
 @pytest.mark.asyncio()
 async def test_filter_new_word_correct_database():
     old = len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no'"))
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word no")
-    dpytest.verify_message("*no* has been filtered.")
-    dpytest.verify_message("Watch your language! Your message: '*k!filter_word no*' in "+dpytest.get_config().guilds[0].channels[0].mention +" has been deleted by KoalaBot.")
+    assertWarning("no")
     assert len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no'")) == old + 1 
 
 @pytest.mark.asyncio()
 async def test_unfilter_word_correct_database():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word unfilterboi")
-    dpytest.verify_message("*unfilterboi* has been filtered.")
-    dpytest.verify_message("Watch your language! Your message: '*k!filter_word unfilterboi*' in "+dpytest.get_config().guilds[0].channels[0].mention +" has been deleted by KoalaBot.")
+    assertWarning("unfilterboi")
     
     old = len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'unfilterboi'"))
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "unfilter_word unfilterboi")
@@ -67,33 +111,71 @@ async def test_unfilter_word_correct_database():
 @pytest.mark.asyncio()
 async def test_list_filtered_words():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing1")
-    dpytest.verify_message("*listing1* has been filtered.")
-    dpytest.verify_message("Watch your language! Your message: '*k!filter_word listing1*' in "+dpytest.get_config().guilds[0].channels[0].mention +" has been deleted by KoalaBot.")
+    assertWarning("listing1")
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing2")
-    dpytest.verify_message("*listing2* has been filtered.")
-    dpytest.verify_message("Watch your language! Your message: '*k!filter_word listing2*' in "+dpytest.get_config().guilds[0].channels[0].mention +" has been deleted by KoalaBot.")
+    assertWarning("listing2")
 
-    assert_embed = discord.Embed()
-    assert_embed.title = "Filtered Words"
-    assert_embed.colour = KOALA_GREEN
-    assert_embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
-    assert_embed.add_field(name="Banned Words", value="listing1\nlisting2\n")
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "check_filtered_words")
-    # to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
+    assert_embed = filteredWordsEmbed(['listing1','listing2'])
     dpytest.verify_embed(embed=assert_embed)
 
 @pytest.mark.asyncio()
-async def test_add_new_mod_channel():
+async def test_list_filtered_words_empty():
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "check_filtered_words")
+    assert_embed = filteredWordsEmbed([])
+    dpytest.verify_embed(embed=assert_embed)
+
+@pytest.mark.asyncio()
+async def test_add_mod_channel():
     channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
     dpytest.get_config().channels.append(channel)
 
-    assert_embed = discord.Embed()
-    assert_embed.title = "Added Moderation Channel"
-    assert_embed.colour = KOALA_GREEN
-    assert_embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
-    assert_embed.add_field(name="Channel Name", value=channel.mention)
-    assert_embed.add_field(name="Channel IDs", value=str(channel.id))
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+str(channel.id))
+    assert_embed = createNewModChannelEmbed(channel)
+    dpytest.verify_embed(embed=assert_embed)
+
+@pytest.mark.asyncio()
+async def test_list_channels():
+    channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
+    dpytest.get_config().channels.append(channel)
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+str(channel.id))
-    # to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
+    assert_embed = createNewModChannelEmbed(channel)
+    dpytest.verify_embed(embed=assert_embed)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "listModChannels")
+    assert_embed = listModChannelEmbed([channel])
+    dpytest.verify_embed(embed=assert_embed)
+
+@pytest.mark.asyncio()
+async def test_list_multiple_channels():
+    channel1 = dpytest.backend.make_text_channel(name="TestChannel1", guild=dpytest.get_config().guilds[0])
+    channel2 = dpytest.backend.make_text_channel(name="TestChannel2", guild=dpytest.get_config().guilds[0])
+    dpytest.get_config().channels.append(channel1)
+    dpytest.get_config().channels.append(channel2)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+str(channel1.id))
+    assert_embed = createNewModChannelEmbed(channel1)
+    dpytest.verify_embed(embed=assert_embed)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+str(channel2.id))
+    assert_embed = createNewModChannelEmbed(channel2)
+    dpytest.verify_embed(embed=assert_embed)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "listModChannels")
+    assert_embed = listModChannelEmbed([channel1,channel2])
+    dpytest.verify_embed(embed=assert_embed)
+
+@pytest.mark.asyncio()
+async def test_remove_mod_channel():
+    channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
+    channelId = str(channel.id)
+    dpytest.get_config().channels.append(channel)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+channelId)
+    assert_embed = createNewModChannelEmbed(channel)
+    dpytest.verify_embed(embed=assert_embed)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel "+channelId)
+    assert_embed = removeModChannelEmbed(channel)
     dpytest.verify_embed(embed=assert_embed)

@@ -67,7 +67,7 @@ class TextFilterCog(commands.Cog):
         embed = discord.Embed()
         embed.colour = KOALA_GREEN
         embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
-        embed.title = "Filtered Words"
+        embed.title = "Koala Moderation - Filtered Words"
         words = ""
         for word in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
             words+=word+"\n"
@@ -91,7 +91,7 @@ class TextFilterCog(commands.Cog):
             embed = discord.Embed()
             embed.colour = KOALA_GREEN
             embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
-            embed.title = "Added Moderation Channel"
+            embed.title = "Koala Moderation - Mod Channel Added"
             embed.add_field(name="Channel Name", value=channel.mention)
             embed.add_field(name="Channel ID", value=channel.id)
             await ctx.channel.send(embed=embed)
@@ -154,10 +154,6 @@ class TextFilterCog(commands.Cog):
                 await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" has been deleted by KoalaBot.")
                 await sendToModerationChannels(message, self)
                 await message.delete()
-
-
-
-
 
 def setup(bot: KoalaBot) -> None:
     """
