@@ -31,6 +31,8 @@ tf_cog = None
 utils_cog =  None
 
 # to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
+# to-do: test edge cases (empty filtered word, multiple words, etc)
+
 
 def setup_function():
     """ setup any state specific to the execution of the given module."""
@@ -46,9 +48,13 @@ def setup_function():
     dpytest.configure(bot)
     print("Tests starting")
 
-def assertWarning(word):
+def assertDeleteWarning(word):
     dpytest.verify_message("*"+word+"* has been filtered.")
-    dpytest.verify_message("Watch your language! Your message: '*k!filter_word "+word+"*' in "+dpytest.get_config().guilds[0].channels[0].mention +" has been deleted by KoalaBot.")
+    dpytest.verify_message("Watch your language! Your message: '*k!filter_word " + word + "*' in " + dpytest.get_config().guilds[0].channels[0].mention + " has been deleted by KoalaBot.")
+
+def assertRiskyWarning(word):
+    dpytest.verify_message("*"+word+"* has been filtered.")
+    dpytest.verify_message("Watch your language! Your message: '*k!filter_word " + word + " risky*' in " + dpytest.get_config().guilds[0].channels[0].mention + " contains a 'risky' word. This is a warning.")
 
 def createNewModChannelEmbed(channel):
     embed = discord.Embed()
@@ -76,53 +82,80 @@ def removeModChannelEmbed(channel):
     embed.add_field(name="ID", value=str(channel.id))
     return embed
 
-def createFilteredWordString(words):
-    createWordString = ""
-    for word in words:
-        createWordString+=word+"\n"
-    return createWordString
+def createFilteredString(text):
+    createTextString = ""
+    for current in text:
+        createTextString+=current+"\n"
+    return createTextString
 
-def filteredWordsEmbed(words):
-    wordString = createFilteredWordString(words)
+def filteredWordsEmbed(words,filter):
+    wordString = createFilteredString(words)
+    filterString = createFilteredString(filter)
     embed = discord.Embed()
     embed.title = "Koala Moderation - Filtered Words"
     embed.colour = KOALA_GREEN
     embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
     embed.add_field(name="Banned Words", value=wordString)
+    embed.add_field(name="Banned Words", value=filterString)
     return embed
 
 @pytest.mark.asyncio()
 async def test_filter_new_word_correct_database():
-    old = len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no'"))
+    old = len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no';"))
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word no")
-    assertWarning("no")
-    assert len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no'")) == old + 1 
+    assertDeleteWarning("no")
+    assert len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no';")) == old + 1 
 
 @pytest.mark.asyncio()
 async def test_unfilter_word_correct_database():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word unfilterboi")
-    assertWarning("unfilterboi")
+    assertDeleteWarning("unfilterboi")
     
-    old = len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'unfilterboi'"))
+    old = len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'unfilterboi';"))
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "unfilter_word unfilterboi")
-    assert len(tf_cog.tf_database_manager.database_manager.db_execute_select("SELECT filtered_text FROM TextFilter WHERE filtered_text = 'unfilterboi';")) == old - 1  
+    assert len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'unfilterboi';")) == old - 1  
     dpytest.verify_message("*unfilterboi* has been unfiltered.")
+
+@pytest.mark.asyncio()
+async def test_filter_empty_word():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word")
+
+@pytest.mark.asyncio()
+async def test_filter_too_many_arguments():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word a b c d e f g")
+
+@pytest.mark.asyncio()
+async def test_unfilter_empty():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "unfilter_word")
+
+@pytest.mark.asyncio()
+async def test_unfilter_too_many_arguments():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "unfilter_word a b c d e")
+
+@pytest.mark.asyncio()
+async def test_unrecognised_filter_type():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word testy unknown")
 
 @pytest.mark.asyncio()
 async def test_list_filtered_words():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing1")
-    assertWarning("listing1")
-    await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing2")
-    assertWarning("listing2")
+    assertDeleteWarning("listing1")
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing2 risky")
+    assertRiskyWarning("listing2")
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "check_filtered_words")
-    assert_embed = filteredWordsEmbed(['listing1','listing2'])
+    assert_embed = filteredWordsEmbed(['listing1','listing2'],['banned','risky'])
     dpytest.verify_embed(embed=assert_embed)
 
 @pytest.mark.asyncio()
 async def test_list_filtered_words_empty():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "check_filtered_words")
-    assert_embed = filteredWordsEmbed([])
+    assert_embed = filteredWordsEmbed([],[])
     dpytest.verify_embed(embed=assert_embed)
 
 @pytest.mark.asyncio()
@@ -179,3 +212,9 @@ async def test_remove_mod_channel():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel "+channelId)
     assert_embed = removeModChannelEmbed(channel)
     dpytest.verify_embed(embed=assert_embed)
+
+@pytest.mark.asyncio()
+@pytest.mark.last()
+async def cleanup():
+    tf_cog.tf_database_manager.database_manager.db_execute_commit(f"DELETE * FROM TextFilter")
+    tf_cog.tf_database_manager.database_manager.db_execute_commit(f"DELETE * FROM TextFilterModeration")
