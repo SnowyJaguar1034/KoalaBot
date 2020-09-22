@@ -88,47 +88,37 @@ class TextFilterCog(commands.Cog):
 
     @commands.command(name="setupModChannel", aliases=["setup_mod_channel"])
     #@commands.check(KoalaBot.is_admin)
-    async def setupModChannel(self, ctx, channelId):
+    async def setupModChannel(self, ctx, channelId, too_many_arguments=None):
         """
         Get a list of filtered words on the current guild.
         :param ctx: The discord context
         :param channelId: The designated channel id for message details
         :return:
         """
-        
+        error="Channel not found or too many arguments, please try again: `k!setupModChannel [channelId]`"
         channel = self.bot.get_channel(int(channelId))
-        if (channel is not None):
+        if (channel != None and too_many_arguments == None):
             self.tf_database_manager.new_mod_channel(ctx.guild.id, channelId)
-            embed = discord.Embed()
-            embed.colour = KOALA_GREEN
-            embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
-            embed.title = "Koala Moderation - Mod Channel Added"
-            embed.add_field(name="Channel Name", value=channel.mention)
-            embed.add_field(name="Channel ID", value=channel.id)
-            await ctx.channel.send(embed=embed)
+            await ctx.channel.send(embed=createModerationChannelEmbed(ctx,channel,"Added"))
+            return
+        raise(Exception(error))
 
     @commands.command(name="removeModChannel", aliases=["remove_mod_channel"])
     #@commands.check(KoalaBot.is_admin)
-    async def removeModChannel(self, ctx, channelId=None):
+    async def removeModChannel(self, ctx, channelId, too_many_arguments=None):
         """
         Get a list of filtered words on the current guild.
         :param ctx: The discord context
         :param channelId: The designated channel id to be removed
         :return:
         """
-        
-        if (channelId == None):
-            await ctx.channel.send("Hey "+ctx.message.author.mention+" you were missing a Channel ID for your command to remove your mod channel. If you don't know your Channel ID, use `k!listModChannels` to get information on your mod channels.")
-        else:
+        error = "Missing Channel ID or too many arguments remove a mod channel. If you don't know your Channel ID, use `k!listModChannels` to get information on your mod channels."
+        channel = self.bot.get_channel(int(channelId))
+        if (channel != None and too_many_arguments == None):
             self.tf_database_manager.remove_mod_channel(ctx.guild.id, channelId)
-            embed = discord.Embed()
-            embed.colour = KOALA_GREEN
-            embed.title = "Koala Moderation - Mod Channel Removed"
-            embed.add_field(name="ID",value=channelId)
-            channel = self.bot.get_channel(int(channelId))
-            if (channel is not None):
-                embed.add_field(name="Name",value=channel.mention)
-            await ctx.channel.send(embed=embed)
+            await ctx.channel.send(embed=createModerationChannelEmbed(ctx,channel,"Removed"))
+            return
+        raise Exception(error)
 
     @commands.command(name="listModChannels", aliases=["list_mod_channels"])
     #@commands.check(KoalaBot.is_admin)
@@ -178,6 +168,15 @@ def setup(bot: KoalaBot) -> None:
     :param  bot: The client of the KoalaBot
     """
     bot.add_cog(TextFilterCog(bot))
+
+def createModerationChannelEmbed(ctx, channel, action):
+    embed = discord.Embed()
+    embed.colour = KOALA_GREEN
+    embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
+    embed.title = "Koala Moderation - Mod Channel " + action
+    embed.add_field(name="Channel Name", value=channel.mention)
+    embed.add_field(name="Channel ID", value=channel.id)
+    return embed
 
 async def filterWord(self, ctx, word, filter_type):
     self.tf_database_manager.new_filtered_text(ctx.guild.id, word, filter_type)

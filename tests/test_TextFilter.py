@@ -78,8 +78,9 @@ def removeModChannelEmbed(channel):
     embed = discord.Embed()
     embed.title = "Koala Moderation - Mod Channel Removed"
     embed.colour = KOALA_GREEN
-    embed.add_field(name="Name", value=channel.mention)
-    embed.add_field(name="ID", value=str(channel.id))
+    embed.set_footer(text=f"Guild ID: {dpytest.get_config().guilds[0].id}")
+    embed.add_field(name="Channel Name", value=channel.mention)
+    embed.add_field(name="Channel ID", value=str(channel.id))
     return embed
 
 def createFilteredString(text):
@@ -168,6 +169,52 @@ async def test_add_mod_channel():
     dpytest.verify_embed(embed=assert_embed)
 
 @pytest.mark.asyncio()
+async def test_add_mod_channel_empty():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel")
+
+@pytest.mark.asyncio()
+async def test_add_mod_channel_unrecognised_channel():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel 123")
+
+@pytest.mark.asyncio()
+async def test_add_mod_channel_too_many_arguments():
+    channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
+    dpytest.get_config().channels.append(channel)
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+str(channel.id)+" a b c d e")
+
+@pytest.mark.asyncio()
+async def test_remove_mod_channel():
+    channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
+    channelId = str(channel.id)
+    dpytest.get_config().channels.append(channel)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+channelId)
+    assert_embed = createNewModChannelEmbed(channel)
+    dpytest.verify_embed(embed=assert_embed)
+
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel "+channelId)
+    assert_embed = removeModChannelEmbed(channel)
+    dpytest.verify_embed(embed=assert_embed)
+
+@pytest.mark.asyncio()
+async def test_remove_mod_channel_empty():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel")
+
+@pytest.mark.asyncio()
+async def test_remove_mod_channel_too_many_arguments():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel 123 a b c d e")
+
+@pytest.mark.asyncio()
+async def test_remove_mod_channel_unrecognised_channel():
+    with pytest.raises(Exception):
+        await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel 123 a b c d e")
+
+@pytest.mark.asyncio()
 async def test_list_channels():
     channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
     dpytest.get_config().channels.append(channel)
@@ -199,22 +246,7 @@ async def test_list_multiple_channels():
     assert_embed = listModChannelEmbed([channel1,channel2])
     dpytest.verify_embed(embed=assert_embed)
 
-@pytest.mark.asyncio()
-async def test_remove_mod_channel():
-    channel = dpytest.backend.make_text_channel(name="TestChannel", guild=dpytest.get_config().guilds[0])
-    channelId = str(channel.id)
-    dpytest.get_config().channels.append(channel)
-
-    await dpytest.message(KoalaBot.COMMAND_PREFIX + "setupModChannel "+channelId)
-    assert_embed = createNewModChannelEmbed(channel)
-    dpytest.verify_embed(embed=assert_embed)
-
-    await dpytest.message(KoalaBot.COMMAND_PREFIX + "removeModChannel "+channelId)
-    assert_embed = removeModChannelEmbed(channel)
-    dpytest.verify_embed(embed=assert_embed)
-
-@pytest.mark.asyncio()
-@pytest.mark.last()
+@pytest.mark.asyncio(order=-1)
 async def cleanup():
     tf_cog.tf_database_manager.database_manager.db_execute_commit(f"DELETE * FROM TextFilter")
     tf_cog.tf_database_manager.database_manager.db_execute_commit(f"DELETE * FROM TextFilterModeration")
