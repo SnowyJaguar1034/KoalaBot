@@ -73,18 +73,8 @@ class TextFilterCog(commands.Cog):
         :param ctx: The discord context
         :return:
         """
-        embed = discord.Embed()
-        embed.colour = KOALA_GREEN
-        embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
-        embed.title = "Koala Moderation - Filtered Words"
-        all_words, all_types = "", ""
-        for word, filter_type in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
-            all_words+=word+"\n"
-            all_types+=filter_type+"\n"
-        embed.add_field(name="Banned Words", value=all_words)
-        embed.add_field(name="Filter Types", value=all_types)
-
-        await ctx.channel.send(embed=embed)
+        all_words_and_types = getListOfWords(self, ctx)
+        await ctx.channel.send(embed=buildWordListEmbed(ctx, all_words_and_types[0], all_words_and_types[1]))
 
     @commands.command(name="setupModChannel", aliases=["setup_mod_channel"])
     #@commands.check(KoalaBot.is_admin)
@@ -130,17 +120,7 @@ class TextFilterCog(commands.Cog):
         """
 
         channels = self.tf_database_manager.get_mod_channel(ctx.guild.id)
-        embed = discord.Embed()
-        embed.colour = KOALA_GREEN
-        embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
-        embed.title = "Koala Moderation - Mod Channels"
-        for channel in channels:
-            details = self.bot.get_channel(int(channel[0]))
-            if (details is not None):
-                embed.add_field(name="Name & Channel ID", value=details.mention + " " + str(details.id), inline=False)
-            else:
-                embed.add_field(name="Channel ID", value=channel[0], inline=False)
-        await ctx.channel.send(embed=embed)
+        await ctx.channel.send(embed=buildChannelListEmbed(self, ctx, channels))
 
     @commands.Cog.listener()
     async def on_message(self,message):
@@ -149,18 +129,18 @@ class TextFilterCog(commands.Cog):
         :param message: The newly received message
         :return:
         """
-        if (message.guild is not None): # and not KoalaBot.is_admin and not KoalaBot.is_owner):
+        if (message.guild != None): # and not KoalaBot.is_admin and not KoalaBot.is_owner):
             censor_list = self.tf_database_manager.get_filtered_text_for_guild(message.guild.id)
             for word,filter_type in censor_list:
                 if (word in message.content):
                     if (filter_type == "risky"):
                         await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" contains a 'risky' word. This is a warning.")
-                        break
+                        return
                     elif (filter_type == "banned"):
                         await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" has been deleted by KoalaBot.")
                         await sendToModerationChannels(message, self)
                         await message.delete()
-                        break
+                        return
 
 def setup(bot: KoalaBot) -> None:
     """
@@ -170,9 +150,7 @@ def setup(bot: KoalaBot) -> None:
     bot.add_cog(TextFilterCog(bot))
 
 def createModerationChannelEmbed(ctx, channel, action):
-    embed = discord.Embed()
-    embed.colour = KOALA_GREEN
-    embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
+    embed = createDefaultEmbed(ctx)
     embed.title = "Koala Moderation - Mod Channel " + action
     embed.add_field(name="Channel Name", value=channel.mention)
     embed.add_field(name="Channel ID", value=channel.id)
@@ -191,16 +169,52 @@ def isModerationChannelAvailable(guild_id, self):
     channels = self.tf_database_manager.get_mod_channel(guild_id)
     return len(channels) > 0
 
+def getListOfWords(self, ctx):
+    all_words, all_types = "", ""
+    for word, filter_type in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
+        all_words+=word+"\n"
+        all_types+=filter_type+"\n"
+    return [all_words, all_types]
+
+def buildWordListEmbed(ctx, all_words, all_types):
+    embed = createDefaultEmbed(ctx)
+    embed.title = "Koala Moderation - Filtered Words"
+    embed.add_field(name="Banned Words", value=all_words)
+    embed.add_field(name="Filter Types", value=all_types)
+    return embed
+
+def createDefaultEmbed(ctx):
+    embed = discord.Embed()
+    embed.colour = KOALA_GREEN
+    embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
+    return embed
+
+def buildChannelListEmbed(self, ctx, channels):
+    embed = createDefaultEmbed(ctx)
+    embed.colour = KOALA_GREEN
+    embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
+    embed.title = "Koala Moderation - Mod Channels"
+    embed = buildChannelList(self, channels, embed)
+    return embed
+
+def buildChannelList(self, channels, embed):
+    for channel in channels:
+        details = self.bot.get_channel(int(channel[0]))
+        if (details != None):
+            embed.add_field(name="Name & Channel ID", value=details.mention + " " + str(details.id), inline=False)
+        else:
+            embed.add_field(name="Channel ID", value=channel[0], inline=False)
+    return embed
+
 async def sendToModerationChannels(message, self):
     if (isModerationChannelAvailable(message.guild.id, self)):
         channels = self.tf_database_manager.get_mod_channel(message.guild.id)
         for each_chan in channels:
             channel = self.bot.get_channel(id=int(each_chan[0]))
-            await channel.send(embed=buildModerationEmbed(message))
+            await channel.send(embed=buildModerationDeletedEmbed(message))
 
-def buildModerationEmbed(message):
-    embed = discord.Embed()
-    embed.colour = KOALA_GREEN
+def buildModerationDeletedEmbed(message):
+    embed = createDefaultEmbed(message)
     embed.title = "Koala Moderation - Message Deleted"
     embed.add_field(name="Reason",value="Contained banned word")
     embed.add_field(name="User",value=message.author.mention)
