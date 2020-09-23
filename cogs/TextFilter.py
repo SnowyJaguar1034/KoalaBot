@@ -10,6 +10,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+import re
 
 # Own modules
 import KoalaBot
@@ -45,7 +46,10 @@ class TextFilterCog(commands.Cog):
         error = "Something has gone wrong, your word may already be filtered or you have entered the command incorrectly. You try again with: `k!filter [filtered_text] [[risky] or [banned]]`"
         if too_many_arguments == None and typeExists(filter_type):
             await filterWord(self, ctx, word, filter_type)
-            await ctx.channel.send("*" + word + "* has been filtered.")
+            if (filter_type == 'email'):
+                await ctx.channel.send("Emails ending with *" + word + ".ac.uk* have been filtered.")
+            else:
+                await ctx.channel.send("*" + word + "* has been filtered as **"+filter_type+"**.")
             return
         raise Exception(error)
 
@@ -132,6 +136,12 @@ class TextFilterCog(commands.Cog):
         if (message.guild != None): # and not KoalaBot.is_admin and not KoalaBot.is_owner):
             censor_list = self.tf_database_manager.get_filtered_text_for_guild(message.guild.id)
             for word,filter_type in censor_list:
+                if filter_type == "email":
+                    regex = '[a-z0-9]+[\._]?[a-z0-9]+[@]'+word+'.ac.uk'
+                    if (re.search(regex, message.content)):
+                        await message.author.send("Be careful! Your message: '*"+message.content+"*' in "+message.channel.mention+" includes personal information and has been deleted by KoalaBot.")
+                        await sendToModerationChannels(message, self)
+                        await message.delete()
                 if (word in message.content):
                     if (filter_type == "risky"):
                         await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" contains a 'risky' word. This is a warning.")
@@ -149,13 +159,6 @@ def setup(bot: KoalaBot) -> None:
     """
     bot.add_cog(TextFilterCog(bot))
 
-def createModerationChannelEmbed(ctx, channel, action):
-    embed = createDefaultEmbed(ctx)
-    embed.title = "Koala Moderation - Mod Channel " + action
-    embed.add_field(name="Channel Name", value=channel.mention)
-    embed.add_field(name="Channel ID", value=channel.id)
-    return embed
-
 async def filterWord(self, ctx, word, filter_type):
     self.tf_database_manager.new_filtered_text(ctx.guild.id, word, filter_type)
 
@@ -163,7 +166,7 @@ async def unfilterWord(self, ctx, word):
     self.tf_database_manager.unfilter_text(ctx.guild.id, word)
 
 def typeExists(filter_type):
-    return filter_type == "risky" or filter_type == "banned"
+    return filter_type == "risky" or filter_type == "banned" or filter_type=="email"
 
 def isModerationChannelAvailable(guild_id, self):
     channels = self.tf_database_manager.get_mod_channel(guild_id)
@@ -175,6 +178,29 @@ def getListOfWords(self, ctx):
         all_words+=word+"\n"
         all_types+=filter_type+"\n"
     return [all_words, all_types]
+
+def buildChannelList(self, channels, embed):
+    for channel in channels:
+        details = self.bot.get_channel(int(channel[0]))
+        if (details != None):
+            embed.add_field(name="Name & Channel ID", value=details.mention + " " + str(details.id), inline=False)
+        else:
+            embed.add_field(name="Channel ID", value=channel[0], inline=False)
+    return embed
+
+async def sendToModerationChannels(message, self):
+    if (isModerationChannelAvailable(message.guild.id, self)):
+        channels = self.tf_database_manager.get_mod_channel(message.guild.id)
+        for each_chan in channels:
+            channel = self.bot.get_channel(id=int(each_chan[0]))
+            await channel.send(embed=buildModerationDeletedEmbed(message))
+
+def createModerationChannelEmbed(ctx, channel, action):
+    embed = createDefaultEmbed(ctx)
+    embed.title = "Koala Moderation - Mod Channel " + action
+    embed.add_field(name="Channel Name", value=channel.mention)
+    embed.add_field(name="Channel ID", value=channel.id)
+    return embed
 
 def buildWordListEmbed(ctx, all_words, all_types):
     embed = createDefaultEmbed(ctx)
@@ -196,22 +222,6 @@ def buildChannelListEmbed(self, ctx, channels):
     embed.title = "Koala Moderation - Mod Channels"
     embed = buildChannelList(self, channels, embed)
     return embed
-
-def buildChannelList(self, channels, embed):
-    for channel in channels:
-        details = self.bot.get_channel(int(channel[0]))
-        if (details != None):
-            embed.add_field(name="Name & Channel ID", value=details.mention + " " + str(details.id), inline=False)
-        else:
-            embed.add_field(name="Channel ID", value=channel[0], inline=False)
-    return embed
-
-async def sendToModerationChannels(message, self):
-    if (isModerationChannelAvailable(message.guild.id, self)):
-        channels = self.tf_database_manager.get_mod_channel(message.guild.id)
-        for each_chan in channels:
-            channel = self.bot.get_channel(id=int(each_chan[0]))
-            await channel.send(embed=buildModerationDeletedEmbed(message))
 
 def buildModerationDeletedEmbed(message):
     embed = createDefaultEmbed(message)

@@ -48,13 +48,21 @@ def setup_function():
     dpytest.configure(bot)
     print("Tests starting")
 
-def assertDeleteWarning(word):
-    dpytest.verify_message("*"+word+"* has been filtered.")
+def assertBannedWarning(word):
     dpytest.verify_message("Watch your language! Your message: '*k!filter_word " + word + "*' in " + dpytest.get_config().guilds[0].channels[0].mention + " has been deleted by KoalaBot.")
 
 def assertRiskyWarning(word):
-    dpytest.verify_message("*"+word+"* has been filtered.")
     dpytest.verify_message("Watch your language! Your message: '*k!filter_word " + word + " risky*' in " + dpytest.get_config().guilds[0].channels[0].mention + " contains a 'risky' word. This is a warning.")
+
+def assertEmailWarning(word):
+    print(word)
+    dpytest.verify_message("Be careful! Your message: '*"+word+"*' in "+dpytest.get_config().guilds[0].channels[0].mention+" includes personal information and has been deleted by KoalaBot.")
+
+def assertFilteredConfirmation(word, type):
+    if (type == "email"):
+        dpytest.verify_message("Emails ending with *" + word + ".ac.uk* have been filtered.")
+    else:
+        dpytest.verify_message("*"+word+"* has been filtered as **"+type+"**.")
 
 def createNewModChannelEmbed(channel):
     embed = discord.Embed()
@@ -104,13 +112,15 @@ def filteredWordsEmbed(words,filter):
 async def test_filter_new_word_correct_database():
     old = len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no';"))
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word no")
-    assertDeleteWarning("no")
+    assertFilteredConfirmation("no","banned")
+    assertBannedWarning("no")
     assert len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'no';")) == old + 1 
 
 @pytest.mark.asyncio()
 async def test_unfilter_word_correct_database():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word unfilterboi")
-    assertDeleteWarning("unfilterboi")
+    assertFilteredConfirmation("unfilterboi","banned")
+    assertBannedWarning("unfilterboi")
     
     old = len(tf_cog.tf_database_manager.database_manager.db_execute_select(f"SELECT filtered_text FROM TextFilter WHERE filtered_text = 'unfilterboi';"))
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "unfilter_word unfilterboi")
@@ -126,6 +136,31 @@ async def test_filter_empty_word():
 async def test_filter_too_many_arguments():
     with pytest.raises(Exception):
         await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word a b c d e f g")
+
+@pytest.mark.asyncio()
+async def test_filter_risky_word():
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word yup risky")
+    assertFilteredConfirmation("yup","risky")
+    assertRiskyWarning("yup")
+
+@pytest.mark.asyncio()
+async def test_filter_email():
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word herts email")
+    assertFilteredConfirmation("herts","email")
+
+@pytest.mark.asyncio()
+async def test_filter_various_emails():
+    await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word herts email")
+    assertFilteredConfirmation("herts","email")
+
+    await dpytest.message("hey stefan@herts.ac.uk")
+    assertEmailWarning("hey stefan@herts.ac.uk")
+
+    await dpytest.message("hey stefan.c.27.abc@herts.ac.uk")
+    assertEmailWarning("hey stefan.c.27.abc@herts.ac.uk")
+
+    await dpytest.message("hey herts.ac.uk")
+    await dpytest.message("hey stefan@herts")
 
 @pytest.mark.asyncio()
 async def test_unfilter_empty():
@@ -145,8 +180,10 @@ async def test_unrecognised_filter_type():
 @pytest.mark.asyncio()
 async def test_list_filtered_words():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing1")
-    assertDeleteWarning("listing1")
+    assertFilteredConfirmation("listing1","banned")
+    assertBannedWarning("listing1")
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "filter_word listing2 risky")
+    assertFilteredConfirmation("listing2","risky")
     assertRiskyWarning("listing2")
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "check_filtered_words")
