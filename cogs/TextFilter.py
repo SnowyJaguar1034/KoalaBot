@@ -93,7 +93,7 @@ class TextFilterCog(commands.Cog):
         channel = self.bot.get_channel(int(channelId))
         if (channel != None and too_many_arguments == None):
             self.tf_database_manager.new_mod_channel(ctx.guild.id, channelId)
-            await ctx.channel.send(embed=createModerationChannelEmbed(ctx,channel,"Added"))
+            await ctx.channel.send(embed=buildModerationChannelEmbed(ctx,channel,"Added"))
             return
         raise(Exception(error))
 
@@ -110,7 +110,7 @@ class TextFilterCog(commands.Cog):
         channel = self.bot.get_channel(int(channelId))
         if (channel != None and too_many_arguments == None):
             self.tf_database_manager.remove_mod_channel(ctx.guild.id, channelId)
-            await ctx.channel.send(embed=createModerationChannelEmbed(ctx,channel,"Removed"))
+            await ctx.channel.send(embed=buildModerationChannelEmbed(ctx,channel,"Removed"))
             return
         raise Exception(error)
 
@@ -140,7 +140,7 @@ class TextFilterCog(commands.Cog):
                     regex = '[a-z0-9]+[\._]?[a-z0-9]+[@]'+word+'.ac.uk'
                     if (re.search(regex, message.content)):
                         await message.author.send("Be careful! Your message: '*"+message.content+"*' in "+message.channel.mention+" includes personal information and has been deleted by KoalaBot.")
-                        await sendToModerationChannels(message, self)
+                        await sendToModerationChannels(self, message)
                         await message.delete()
                 if (word in message.content):
                     if (filter_type == "risky"):
@@ -148,7 +148,7 @@ class TextFilterCog(commands.Cog):
                         return
                     elif (filter_type == "banned"):
                         await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" has been deleted by KoalaBot.")
-                        await sendToModerationChannels(message, self)
+                        await sendToModerationChannels(self, message)
                         await message.delete()
                         return
 
@@ -160,19 +160,45 @@ def setup(bot: KoalaBot) -> None:
     bot.add_cog(TextFilterCog(bot))
 
 async def filterWord(self, ctx, word, filter_type):
+    """
+    Calls to the datbase to filter a word
+    :param ctx: the discord context
+    :param word: the word to be filtered
+    :param filter_type: the filter_type of the word to be added
+    """
     self.tf_database_manager.new_filtered_text(ctx.guild.id, word, filter_type)
 
 async def unfilterWord(self, ctx, word):
+    """
+    Calls to the database to unfilter a word
+    :param ctx: The discord context
+    :param word: The word to be unfiltered
+    """
     self.tf_database_manager.unfilter_text(ctx.guild.id, word)
 
 def typeExists(filter_type):
+    """
+    Validates the inputted filter_type
+    :param filter_type: The filter type to be checked
+    :return: boolean checking if the filter type can be handled by the system, checks for risky, banned or email
+    """
     return filter_type == "risky" or filter_type == "banned" or filter_type=="email"
 
-def isModerationChannelAvailable(guild_id, self):
+def isModerationChannelAvailable(self, guild_id,):
+    """
+    Checks if any mod channels exist to be sent to
+    :param guild_id: The guild to retrieve mod channels from
+    :return: boolean true if mod channel exists, false otherwise
+    """
     channels = self.tf_database_manager.get_mod_channel(guild_id)
     return len(channels) > 0
 
 def getListOfWords(self, ctx):
+    """
+    Gets a list of filtered words and corresponding types in a guild
+    :param ctx: the discord context
+    :return [all_words, all_types]: a list containing two lists of filtered words and types
+    """
     all_words, all_types = "", ""
     for word, filter_type in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
         all_words+=word+"\n"
@@ -180,6 +206,12 @@ def getListOfWords(self, ctx):
     return [all_words, all_types]
 
 def buildChannelList(self, channels, embed):
+    """
+    Builds a list of mod channels and adds them to the embed
+    :param channels: list of mod channels 
+    :param embed: The pre-existing embed to add the channel list fields to
+    :return embed: the updated embed with the list of channels appended to
+    """
     for channel in channels:
         details = self.bot.get_channel(int(channel[0]))
         if (details != None):
@@ -188,14 +220,25 @@ def buildChannelList(self, channels, embed):
             embed.add_field(name="Channel ID", value=channel[0], inline=False)
     return embed
 
-async def sendToModerationChannels(message, self):
-    if (isModerationChannelAvailable(message.guild.id, self)):
+async def sendToModerationChannels(self, message):
+    """
+    Send details about deleted message to mod channels
+    :param message: The message in question which is being deleted
+    """
+    if (isModerationChannelAvailable(self, message.guild.id)):
         channels = self.tf_database_manager.get_mod_channel(message.guild.id)
         for each_chan in channels:
             channel = self.bot.get_channel(id=int(each_chan[0]))
             await channel.send(embed=buildModerationDeletedEmbed(message))
 
-def createModerationChannelEmbed(ctx, channel, action):
+def buildModerationChannelEmbed(ctx, channel, action):
+    """
+    Builds a moderation embed which display some information about the mod channel being created/removed
+    :param ctx: The discord context
+    :param channel: The channel to be created/removed
+    :param action: either "Added" or "Removed" to tell the user what happened to the mod channel
+    :return embed: The moderation embed to be sent to the user
+    """
     embed = createDefaultEmbed(ctx)
     embed.title = "Koala Moderation - Mod Channel " + action
     embed.add_field(name="Channel Name", value=channel.mention)
@@ -203,6 +246,13 @@ def createModerationChannelEmbed(ctx, channel, action):
     return embed
 
 def buildWordListEmbed(ctx, all_words, all_types):
+    """
+    Builds the embed that is sent to list all the filtered words
+    :param ctx: The discord context
+    :param all_words: List of all the filtered words in the guild
+    :param all_types: List of all the corresponding filter types for the words in the guild
+    :return embed with information about the deleted message:
+    """
     embed = createDefaultEmbed(ctx)
     embed.title = "Koala Moderation - Filtered Words"
     embed.add_field(name="Banned Words", value=all_words)
@@ -210,12 +260,23 @@ def buildWordListEmbed(ctx, all_words, all_types):
     return embed
 
 def createDefaultEmbed(ctx):
+    """
+    Creates a default embed that all embeds share
+    :param ctx: The discord context
+    :return embed with basic information which should be built upon:
+    """
     embed = discord.Embed()
     embed.colour = KOALA_GREEN
     embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
     return embed
 
 def buildChannelListEmbed(self, ctx, channels):
+    """
+    Builds the embed that is sent to list all the mod channels
+    :param ctx: The discord context
+    :param channels: List of channels in the guild
+    :return embed with list of mod channels:
+    """
     embed = createDefaultEmbed(ctx)
     embed.colour = KOALA_GREEN
     embed.set_footer(text=f"Guild ID: {ctx.guild.id}")
@@ -224,6 +285,11 @@ def buildChannelListEmbed(self, ctx, channels):
     return embed
 
 def buildModerationDeletedEmbed(message):
+    """
+    Builds the embed that is sent after a message is deleted for containing a banned word
+    :param message: the message object to be deleted
+    :return embed with information about the deleted message:
+    """
     embed = createDefaultEmbed(message)
     embed.title = "Koala Moderation - Message Deleted"
     embed.add_field(name="Reason",value="Contained banned word")
@@ -234,6 +300,11 @@ def buildModerationDeletedEmbed(message):
     return embed
 
 def doesWordExist(self, ft_id):
+    """
+    Checks if word exists in database given an ID
+    :param ft_id: filtered text id of word to be removed
+    :return boolean of whether the word exists or not:
+    """
     return len(self.database_manager.db_execute_select(f"SELECT * FROM TextFilter WHERE filtered_text_id = (\"{ft_id}\");")) > 0
 
 class TextFilterDBManager:
@@ -326,8 +397,19 @@ class TextFilterDBManager:
         return censor_list
 
     def get_mod_channel(self, guild_id):
+        """
+        Gets specific mod channels given a guild id
+        :param guild_id: Guild ID to retrieve mod channel from
+        :return: list of mod channels
+        """
         return self.database_manager.db_execute_select(f"SELECT channel_id FROM TextFilterModeration WHERE guild_id = {guild_id};")
 
     def remove_mod_channel(self, guild_id, channel_id):
+        """
+        Removes a specific mod channel in a guild
+        :param guild_id: Guild ID to remove mod channel from
+        :param channel_id: Mod channel to be removed
+        :return:
+        """
         self.database_manager.db_execute_commit(
             f"DELETE FROM TextFilterModeration WHERE guild_id = ({guild_id}) AND channel_id = (\"{channel_id}\");")
