@@ -97,6 +97,32 @@ class TextFilterCog(commands.Cog):
             return
         raise(Exception(error))
 
+    @commands.command(name="ignore")
+    #@commands.check(KoalaBot.is_admin)
+    async def ignore(self, ctx, ignore, ignore_type, too_many_arguments=None):
+      #  error = "Missing Ignore ID or too many arguments remove a mod channel. If you don't know your Channel ID, use `k!listModChannels` to get information on your mod channels."  
+        if (ignore_type == "channel"):
+            ignore = ctx.message.channel_mentions[0].id
+            ignore_exists = self.bot.get_channel(int(ignore))
+        elif (ignore_type == "user"):
+            ignore = ctx.message.mentions[0].id
+            ignore_exists = self.bot.get_user(int(ignore))
+        if (ignore_exists != None):
+            self.tf_database_manager.new_ignore(ctx.guild.id, ignore_type, ignore)
+            await ctx.channel.send("New ignore added: " + str(ignore))
+            return
+
+    @commands.command(name="removeIgnore", aliases=["remove_ignore"])
+    #@commands.check(KoalaBot.is_admin)
+    async def removeIgnore(self, ctx, ignore, too_many_arguments=None):
+        if (len(ctx.message.mentions) > 0):
+            ignore = ctx.message.mentions[0].id
+        elif (len(ctx.message.channel_mentions) > 0):
+            ignore = ctx.message.channel_mentions[0].id
+        self.tf_database_manager.remove_ignore(ctx.guild.id, ignore)
+        await ctx.channel.send("Ignore removed: " + str(ignore))
+        return
+
     @commands.command(name="removeModChannel", aliases=["remove_mod_channel"])
     #@commands.check(KoalaBot.is_admin)
     async def removeModChannel(self, ctx, channelId, too_many_arguments=None):
@@ -135,14 +161,16 @@ class TextFilterCog(commands.Cog):
         """
         if (message.guild != None): # and not KoalaBot.is_admin and not KoalaBot.is_owner):
             censor_list = self.tf_database_manager.get_filtered_text_for_guild(message.guild.id)
+            ignore_list_users = self.tf_database_manager.get_ignore_list_users(message.guild.id)
+            ignore_list_channels = self.tf_database_manager.get_ignore_list_channels(message.guild.id)
             for word,filter_type in censor_list:
-                if filter_type == "email":
-                    regex = '[a-z0-9]+[\._]?[a-z0-9]+[@]'+word+'.ac.uk'
-                    if (re.search(regex, message.content)):
-                        await message.author.send("Be careful! Your message: '*"+message.content+"*' in "+message.channel.mention+" includes personal information and has been deleted by KoalaBot.")
-                        await sendToModerationChannels(self, message)
-                        await message.delete()
-                if (word in message.content):
+                # if filter_type == "email":
+                #     regex = '[a-z0-9]+[\._]?[a-z0-9]+[@]'+word+'.ac.uk'
+                #     if (re.search(regex, message.content)):
+                #         await message.author.send("Be careful! Your message: '*"+message.content+"*' in "+message.channel.mention+" includes personal information and has been deleted by KoalaBot.")
+                #         await sendToModerationChannels(self, message)
+                #         await message.delete()
+                if (word in message.content and message.channel.id not in ignore_list_channels and message.author.id not in ignore_list_users):
                     if (filter_type == "risky"):
                         await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" contains a 'risky' word. This is a warning.")
                         return
@@ -296,7 +324,7 @@ def buildModerationDeletedEmbed(message):
     embed.add_field(name="User",value=message.author.mention)
     embed.add_field(name="Channel",value=message.channel.mention)
     embed.add_field(name="Message",value=message.content)
-    embed.add_field(name="Message",value=message.created_at)
+    embed.add_field(name="Timestamp",value=message.created_at)
     return embed
 
 def doesWordExist(self, ft_id):
@@ -342,8 +370,18 @@ class TextFilterDBManager:
         PRIMARY KEY (channel_id)
         );"""
 
+        sql_create_ignore_list_table = """
+        CREATE TABLE IF NOT EXISTS TextFilterIgnoreList (
+        ignore_id text NOT NULL,
+        guild_id integer NOT NULL,
+        ignore_type text NOT NULL,
+        ignore integer NOT NULL,
+        PRIMARY KEY (ignore_id)
+        );"""
+
         self.database_manager.db_execute_commit(sql_create_text_filter_table)
         self.database_manager.db_execute_commit(sql_create_mod_table)
+        self.database_manager.db_execute_commit(sql_create_ignore_list_table)
 
     def new_mod_channel(self, guild_id, channel_id):
         """
@@ -369,6 +407,18 @@ class TextFilterDBManager:
                 f"INSERT INTO TextFilter (filtered_text_id, guild_id, filtered_text, filter_type) VALUES (\"{ft_id}\", {guild_id}, \"{filtered_text}\", \"{filter_type}\");")
             return 
         raise Exception("Filtered word already exists")
+
+    def new_ignore(self, guild_id, ignore_type, ignore):
+        ignore_id = str(guild_id) + str(ignore)
+        self.database_manager.db_execute_commit(
+            f"INSERT INTO TextFilterIgnoreList (ignore_id, guild_id, ignore_type, ignore) VALUES (\"{ignore_id}\", {guild_id}, \"{ignore_type}\", {ignore});"
+        )
+
+    def remove_ignore(self, guild_id, ignore):
+        ignore_id = str(guild_id) + str(ignore)
+        self.database_manager.db_execute_commit(
+            f"DELETE FROM TextFilterIgnoreList WHERE ignore_id=(\"{ignore_id}\");"
+        )
             
     def unfilter_text(self, guild_id, filtered_text):
         """
@@ -395,6 +445,20 @@ class TextFilterDBManager:
         for row in rows:
             censor_list.append((row[2], row[3]))
         return censor_list
+
+    def get_ignore_list_channels(self, guild_id):
+        rows = self.database_manager.db_execute_select(f"SELECT * FROM TextFilterIgnoreList WHERE guild_id = {guild_id} AND ignore_type = \"channel\" ")
+        ilist = []
+        for row in rows:
+            ilist.append((row[3]))
+        return ilist
+    
+    def get_ignore_list_users(self, guild_id):
+        rows = self.database_manager.db_execute_select(f"SELECT * FROM TextFilterIgnoreList WHERE guild_id = {guild_id} AND ignore_type = \"user\" ")
+        ilist = []
+        for row in rows:
+            ilist.append((row[3]))
+        return ilist
 
     def get_mod_channel(self, guild_id):
         """
