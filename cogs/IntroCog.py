@@ -11,8 +11,8 @@ Commented using reStructuredText (reST)
 
 # Libs
 import asyncio
+
 import discord
-import os
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -27,7 +27,7 @@ KoalaBot and confirm you have read and understand our Privacy Policy. For legal 
 the following link: http://legal.koalabot.uk/"""
 DEFAULT_WELCOME_MESSAGE = "Hello. This is a default welcome message because the guild that this came from did not configure a welcome message! Please see below."
 # Variables
-DBManager = KoalaDBManager.KoalaDBManager(KoalaBot.DATABASE_PATH, KoalaBot.DB_KEY)
+DBManager = KoalaDBManager.KoalaDBManager(KoalaBot.DATABASE_PATH)
 
 
 def wait_for_message(bot: discord.Client, ctx: commands.Context) -> (discord.Message, discord.TextChannel):
@@ -83,7 +83,7 @@ def get_non_bot_members(guild: discord.Guild):
         return [member for member in guild.members if not member.bot]
 
 
-class IntroCog(commands.Cog, name="KoalaBot"):
+class IntroCog(commands.Cog):
     """
     A discord.py cog with commands pertaining to the welcome messages that a member will receive
     """
@@ -178,11 +178,6 @@ class IntroCog(commands.Cog, name="KoalaBot"):
             else:
                 await ctx.send("Okay, I won't update the welcome message then.")
 
-    @commands.check(KoalaBot.is_admin)
-    @commands.command(name="welcomeViewMsg")
-    async def view_welcome_message(self, ctx):
-        await ctx.send(f"""Your current welcome message is:\n\r{get_guild_welcome_message(ctx.guild.id)}""")
-
     @update_welcome_message.error
     async def on_update_error(self, ctx, error):
         if isinstance(error, discord.ext.commands.MissingRequiredArgument):
@@ -195,4 +190,3 @@ def setup(bot: KoalaBot) -> None:
     :param bot: The client of the KoalaBot
     """
     bot.add_cog(IntroCog(bot))
-    print("IntroCog is ready.")

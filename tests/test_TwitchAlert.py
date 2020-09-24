@@ -90,7 +90,7 @@ async def test_setup():
 async def twitch_cog():
     """ setup any state specific to the execution of the given module."""
     bot = commands.Bot(command_prefix=KoalaBot.COMMAND_PREFIX)
-    database_manager = KoalaDBManager.KoalaDBManager(DB_PATH, KoalaBot.DB_KEY)
+    database_manager = KoalaDBManager.KoalaDBManager(DB_PATH)
     twitch_cog = TwitchAlert.TwitchAlert(bot, database_manager=database_manager)
     bot.add_cog(twitch_cog)
     await dpytest.empty_queue()
@@ -330,9 +330,37 @@ async def test_remove_team_from_twitch_alert_wrong_guild(twitch_cog):
 
 @pytest.mark.asyncio()
 async def test_on_ready(twitch_cog):
-    with mock.patch.object(TwitchAlert.TwitchAlert.loop_check_live, 'start') as mock1:
+    with mock.patch.object(TwitchAlert.TwitchAlert, 'start_loop') as mock1:
         await twitch_cog.on_ready()
     mock1.assert_called_with()
+
+
+def test_start_loop(twitch_cog):
+    with mock.patch.object(TwitchAlert.TwitchAlert, 'loop_check_live') as mock1:
+        twitch_cog.start_loop()
+    mock1.assert_called_with()
+    assert twitch_cog.loop_thread is not None
+
+
+def test_start_loop_repeated(twitch_cog):
+    twitch_cog.start_loop()
+    with pytest.raises(Exception,
+                       match="Loop is already running!"):
+        twitch_cog.start_loop()
+
+
+def test_end_loop(twitch_cog):
+    twitch_cog.start_loop()
+    assert twitch_cog.loop_thread is not None
+
+    twitch_cog.end_loop()
+    assert twitch_cog.loop_thread is None
+
+
+def test_end_empty_loop(twitch_cog):
+    with pytest.raises(Exception,
+                       match="Loop is not running!"):
+        twitch_cog.end_loop()
 
 
 @mock.patch("utils.KoalaUtils.random_id", mock.MagicMock(return_value=7363))
@@ -426,7 +454,7 @@ def test_get_team_users(twitch_api_handler):
 # Test TwitchAlertDBManager
 @pytest.fixture
 def twitch_alert_db_manager(twitch_cog):
-    return TwitchAlert.TwitchAlertDBManager(KoalaDBManager.KoalaDBManager(DB_PATH, KoalaBot.DB_KEY), twitch_cog.bot)
+    return TwitchAlert.TwitchAlertDBManager(KoalaDBManager.KoalaDBManager(DB_PATH), twitch_cog.bot)
 
 
 @pytest.fixture

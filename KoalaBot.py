@@ -6,11 +6,9 @@ Run this to start the Bot
 
 Commented using reStructuredText (reST)
 """
-__author__ = "Jack Draper, Kieran Allinson, Viraj Shah," \
-             " Anan Venkatesh, Harry Nelson, Robert Slawik, Rurda Malik, Stefan Cooper"
+__author__ = "Jack Draper, Kieran Allinson, Viraj Shah"
 __copyright__ = "Copyright (c) 2020 KoalaBot"
-__credits__ = ["Jack Draper", "Kieran Allinson", "Viraj Shah",
-               "Anan Venkatesh", "Harry Nelson", "Robert Slawik", "Rurda Malik", "Stefan Cooper"]
+__credits__ = ["Jack Draper", "Kieran Allinson", "Viraj Shah"]
 __license__ = "MIT License"
 __version__ = "0.0.3"
 __maintainer__ = "Jack Draper, Kieran Allinson, Viraj Shah"
@@ -36,7 +34,6 @@ from utils.KoalaUtils import error_embed
 load_dotenv()
 BOT_TOKEN = os.environ['DISCORD_TOKEN']
 BOT_OWNER = os.environ['BOT_OWNER']
-DB_KEY = os.environ.get('SQLITE_KEY', "2DD29CA851E7B56E4697B0E1F08507293D761A05CE4D1B628663F411A8086D99")
 COMMAND_PREFIX = "k!"
 STREAMING_URL = "https://twitch.tv/jaydwee"
 COGS_DIR = "cogs"
@@ -50,7 +47,7 @@ PERMISSION_ERROR_TEXT = "This guild does not have this extension enabled, go to 
 # Variables
 started = False
 client = commands.Bot(command_prefix=COMMAND_PREFIX)
-database_manager = DBManager(DATABASE_PATH, DB_KEY)
+database_manager = DBManager(DATABASE_PATH)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)-8s %(message)s')
 logger = logging.getLogger('discord')
 is_dpytest = False
@@ -62,10 +59,7 @@ def is_owner(ctx):
     :param ctx: The context of the message
     :return: True if owner or test, False otherwise
     """
-    if is_dm_channel(ctx):
-        return False
-    else:
-        return ctx.author.id == int(BOT_OWNER) or (str(ctx.author) == TEST_USER and is_dpytest)
+    return ctx.author.id == int(BOT_OWNER) or (str(ctx.author) == TEST_USER and is_dpytest)
 
 
 def is_admin(ctx):
@@ -75,13 +69,8 @@ def is_admin(ctx):
     :param ctx: The context of the message
     :return: True if admin or test, False otherwise
     """
-    if is_dm_channel(ctx):
-        return False
-    else:
-        return ctx.author.guild_permissions.administrator or (str(ctx.author) == TEST_USER and is_dpytest)
+    return ctx.author.guild_permissions.administrator or (str(ctx.author) == TEST_USER and is_dpytest)
 
-def is_dm_channel(ctx):
-    return isinstance(ctx.channel, discord.channel.DMChannel)
 
 def load_all_cogs():
     """
@@ -112,19 +101,9 @@ async def dm_group_message(members: [discord.Member], message: str):
             pass
     return count
 
-
 def check_guild_has_ext(ctx, extension_id):
-    """
-    A check for if a guild has a given koala extension
-    :param ctx: A discord context
-    :param extension_id: The koala extension ID
-    :return: True if has ext
-    """
-    if is_dm_channel(ctx):
-        return False
     if (not database_manager.extension_enabled(ctx.message.guild.id, extension_id)) and (not is_dpytest):
         raise PermissionError(PERMISSION_ERROR_TEXT)
-    return True
 
 @client.event
 async def on_command_error(ctx, error):
