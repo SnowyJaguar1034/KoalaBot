@@ -45,11 +45,26 @@ class TextFilterCog(commands.Cog):
         """
         error = "Something has gone wrong, your word may already be filtered or you have entered the command incorrectly. You try again with: `k!filter [filtered_text] [[risky] or [banned]]`"
         if too_many_arguments == None and typeExists(filter_type):
-            await filterWord(self, ctx, word, filter_type)
-            if (filter_type == 'email'):
-                await ctx.channel.send("Emails ending with *" + word + ".ac.uk* have been filtered.")
-            else:
-                await ctx.channel.send("*" + word + "* has been filtered as **"+filter_type+"**.")
+            await filterText(self, ctx, word, filter_type, False)
+            await ctx.channel.send("*" + word + "* has been filtered as **"+filter_type+"**.")
+            return
+        raise Exception(error)
+
+    @commands.command(name="filterRegex", aliases=["filter_regex"])
+    #@commands.check(KoalaBot.is_admin)
+    async def filter_new_regex(self, ctx, regex, filter_type="banned", too_many_arguments=None):
+        """
+        Adds new word to the filtered text list
+        :param ctx: The discord context
+        :param regex: The first argument and regex to be filtered
+        :param filter_type: The filter type (banned or risky)
+        :return:
+        """
+        error = "Something has gone wrong, this regex may already be filtered or you have entered the command incorrectly. You try again with: `k!filterRegex [filtered_regex] [[risky] or [banned]]`. \
+                One example for a regex could be to block emails with: [a-z0-9]+[\._]?[a-z0-9]+[@]+[herts]+[.ac.uk] where EMAIL is the university type (e.g herts)"
+        if too_many_arguments == None and typeExists(filter_type):
+            await filterText(self, ctx, regex, filter_type, True)
+            await ctx.channel.send("*" + regex + "* has been filtered as **"+filter_type+"**.")
             return
         raise Exception(error)
 
@@ -78,7 +93,8 @@ class TextFilterCog(commands.Cog):
         :return:
         """
         all_words_and_types = getListOfWords(self, ctx)
-        await ctx.channel.send(embed=buildWordListEmbed(ctx, all_words_and_types[0], all_words_and_types[1]))
+        print(all_words_and_types)
+        await ctx.channel.send(embed=buildWordListEmbed(ctx, all_words_and_types[0], all_words_and_types[1], all_words_and_types[2]))
 
     @commands.command(name="setupModChannel", aliases=["setup_mod_channel"])
     #@commands.check(KoalaBot.is_admin)
@@ -100,7 +116,7 @@ class TextFilterCog(commands.Cog):
     @commands.command(name="ignore")
     #@commands.check(KoalaBot.is_admin)
     async def ignore(self, ctx, ignore, ignore_type, too_many_arguments=None):
-      #  error = "Missing Ignore ID or too many arguments remove a mod channel. If you don't know your Channel ID, use `k!listModChannels` to get information on your mod channels."  
+        error = "Missing Ignore ID or too many arguments remove a mod channel. If you don't know your Channel ID, use `k!listModChannels` to get information on your mod channels."  
         if (ignore_type == "channel"):
             ignore = ctx.message.channel_mentions[0].id
             ignore_exists = self.bot.get_channel(int(ignore))
@@ -111,8 +127,9 @@ class TextFilterCog(commands.Cog):
             self.tf_database_manager.new_ignore(ctx.guild.id, ignore_type, ignore)
             await ctx.channel.send("New ignore added: " + str(ignore))
             return
+        raise(Exception(error))
 
-    @commands.command(name="removeIgnore", aliases=["remove_ignore"])
+    @commands.command(name="removeIgnore", aliases=["remove_ignore", "unignore"])
     #@commands.check(KoalaBot.is_admin)
     async def removeIgnore(self, ctx, ignore, too_many_arguments=None):
         if (len(ctx.message.mentions) > 0):
@@ -161,16 +178,8 @@ class TextFilterCog(commands.Cog):
         """
         if (message.guild != None): # and not KoalaBot.is_admin and not KoalaBot.is_owner):
             censor_list = self.tf_database_manager.get_filtered_text_for_guild(message.guild.id)
-            ignore_list_users = self.tf_database_manager.get_ignore_list_users(message.guild.id)
-            ignore_list_channels = self.tf_database_manager.get_ignore_list_channels(message.guild.id)
-            for word,filter_type in censor_list:
-                # if filter_type == "email":
-                #     regex = '[a-z0-9]+[\._]?[a-z0-9]+[@]'+word+'.ac.uk'
-                #     if (re.search(regex, message.content)):
-                #         await message.author.send("Be careful! Your message: '*"+message.content+"*' in "+message.channel.mention+" includes personal information and has been deleted by KoalaBot.")
-                #         await sendToModerationChannels(self, message)
-                #         await message.delete()
-                if (word in message.content and message.channel.id not in ignore_list_channels and message.author.id not in ignore_list_users):
+            for word,filter_type,is_regex in censor_list:
+                if ((word in message.content or re.search(word,message.content)) and not isIgnored(self, message)):
                     if (filter_type == "risky"):
                         await message.author.send("Watch your language! Your message: '*"+message.content+"*' in "+message.channel.mention+" contains a 'risky' word. This is a warning.")
                         return
@@ -180,6 +189,11 @@ class TextFilterCog(commands.Cog):
                         await message.delete()
                         return
 
+def isIgnored(self, message):
+    ignore_list_users = self.tf_database_manager.get_ignore_list_users(message.guild.id)
+    ignore_list_channels = self.tf_database_manager.get_ignore_list_channels(message.guild.id)
+    return message.channel.id in ignore_list_channels or message.author.id in ignore_list_users
+
 def setup(bot: KoalaBot) -> None:
     """
     Loads this cog into the selected bot
@@ -187,14 +201,14 @@ def setup(bot: KoalaBot) -> None:
     """
     bot.add_cog(TextFilterCog(bot))
 
-async def filterWord(self, ctx, word, filter_type):
+async def filterText(self, ctx, text, filter_type, is_regex):
     """
     Calls to the datbase to filter a word
     :param ctx: the discord context
-    :param word: the word to be filtered
+    :param text: the word to be filtered
     :param filter_type: the filter_type of the word to be added
     """
-    self.tf_database_manager.new_filtered_text(ctx.guild.id, word, filter_type)
+    self.tf_database_manager.new_filtered_text(ctx.guild.id, text, filter_type, is_regex)
 
 async def unfilterWord(self, ctx, word):
     """
@@ -210,7 +224,7 @@ def typeExists(filter_type):
     :param filter_type: The filter type to be checked
     :return: boolean checking if the filter type can be handled by the system, checks for risky, banned or email
     """
-    return filter_type == "risky" or filter_type == "banned" or filter_type=="email"
+    return filter_type == "risky" or filter_type == "banned"
 
 def isModerationChannelAvailable(self, guild_id,):
     """
@@ -227,11 +241,15 @@ def getListOfWords(self, ctx):
     :param ctx: the discord context
     :return [all_words, all_types]: a list containing two lists of filtered words and types
     """
-    all_words, all_types = "", ""
-    for word, filter_type in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
+    all_words, all_types, all_regex = "", "", ""
+    for word, filter_type, regex in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
+        print("word " +word)
+        print("type "+filter_type)
+        print("regex "+regex)
         all_words+=word+"\n"
         all_types+=filter_type+"\n"
-    return [all_words, all_types]
+        all_regex+=regex+"\n"
+    return [all_words, all_types, all_regex]
 
 def buildChannelList(self, channels, embed):
     """
@@ -273,7 +291,7 @@ def buildModerationChannelEmbed(ctx, channel, action):
     embed.add_field(name="Channel ID", value=channel.id)
     return embed
 
-def buildWordListEmbed(ctx, all_words, all_types):
+def buildWordListEmbed(ctx, all_words, all_types, all_regex):
     """
     Builds the embed that is sent to list all the filtered words
     :param ctx: The discord context
@@ -281,10 +299,12 @@ def buildWordListEmbed(ctx, all_words, all_types):
     :param all_types: List of all the corresponding filter types for the words in the guild
     :return embed with information about the deleted message:
     """
+    print("test")
     embed = createDefaultEmbed(ctx)
     embed.title = "Koala Moderation - Filtered Words"
     embed.add_field(name="Banned Words", value=all_words)
     embed.add_field(name="Filter Types", value=all_types)
+    embed.add_field(name="Is Regex?", value=all_regex)
     return embed
 
 def createDefaultEmbed(ctx):
@@ -360,6 +380,7 @@ class TextFilterDBManager:
         guild_id integer NOT NULL,
         filtered_text text NOT NULL,
         filter_type text NOT NULL,
+        is_regex boolean NOT NULL,
         PRIMARY KEY (filtered_text_id)
         );"""
 
@@ -393,7 +414,7 @@ class TextFilterDBManager:
         self.database_manager.db_execute_commit(
             f"INSERT INTO TextFilterModeration (channel_id, guild_id) VALUES (\"{channel_id}\", {guild_id});")
 
-    def new_filtered_text(self, guild_id, filtered_text, filter_type):
+    def new_filtered_text(self, guild_id, filtered_text, filter_type, is_regex):
         """
         Adds new filtered word for a guild
         :param guild_id: Guild ID to retrieve filtered words from
@@ -403,8 +424,9 @@ class TextFilterDBManager:
         """
         ft_id = str(guild_id) + filtered_text
         if not doesWordExist(self, ft_id):
+            print(is_regex)
             self.database_manager.db_execute_commit(
-                f"INSERT INTO TextFilter (filtered_text_id, guild_id, filtered_text, filter_type) VALUES (\"{ft_id}\", {guild_id}, \"{filtered_text}\", \"{filter_type}\");")
+                f"INSERT INTO TextFilter (filtered_text_id, guild_id, filtered_text, filter_type, is_regex) VALUES (\"{ft_id}\", {guild_id}, \"{filtered_text}\", \"{filter_type}\", {is_regex});")
             return 
         raise Exception("Filtered word already exists")
 
@@ -443,7 +465,8 @@ class TextFilterDBManager:
         rows = self.database_manager.db_execute_select(f"SELECT * FROM TextFilter WHERE guild_id = {guild_id};")
         censor_list = []
         for row in rows:
-            censor_list.append((row[2], row[3]))
+            censor_list.append((row[2], row[3], str(row[4])))
+        print(censor_list)
         return censor_list
 
     def get_ignore_list_channels(self, guild_id):
