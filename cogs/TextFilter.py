@@ -34,7 +34,7 @@ class TextFilterCog(commands.Cog):
         self.tf_database_manager.create_tables()
 
     @commands.command(name="filter", aliases=["filter_word"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def filter_new_word(self, ctx, word, filter_type="banned", too_many_arguments=None):
         """
         Adds new word to the filtered text list
@@ -51,7 +51,7 @@ class TextFilterCog(commands.Cog):
         raise Exception(error)
 
     @commands.command(name="filterRegex", aliases=["filter_regex"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def filter_new_regex(self, ctx, regex, filter_type="banned", too_many_arguments=None):
         """
         Adds new word to the filtered text list
@@ -69,7 +69,7 @@ class TextFilterCog(commands.Cog):
         raise Exception(error)
 
     @commands.command(name="unfilter", aliases=["unfilter_word"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def unfilter_word(self, ctx, word, too_many_arguments=None):
         """
         Removes existing words from filter list
@@ -85,7 +85,7 @@ class TextFilterCog(commands.Cog):
         raise Exception(error)
 
     @commands.command(name="checkFilteredWords", aliases=["check_filtered_words"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def checkFilteredWords(self, ctx):
         """
         Get a list of filtered words on the current guild.
@@ -93,11 +93,10 @@ class TextFilterCog(commands.Cog):
         :return:
         """
         all_words_and_types = getListOfWords(self, ctx)
-        print(all_words_and_types)
         await ctx.channel.send(embed=buildWordListEmbed(ctx, all_words_and_types[0], all_words_and_types[1], all_words_and_types[2]))
 
     @commands.command(name="setupModChannel", aliases=["setup_mod_channel"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def setupModChannel(self, ctx, channelId, too_many_arguments=None):
         """
         Get a list of filtered words on the current guild.
@@ -114,34 +113,49 @@ class TextFilterCog(commands.Cog):
         raise(Exception(error))
 
     @commands.command(name="ignore")
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def ignore(self, ctx, ignore, ignore_type, too_many_arguments=None):
+        """
+        Add a new ignore to the database
+        :param ctx: The discord context
+        :param ignore: The discord mention of the Channel/User
+        :param ignore_type: 'user' or 'channel'
+        :return:
+        """
         error = "Missing Ignore ID or too many arguments remove a mod channel. If you don't know your Channel ID, use `k!listModChannels` to get information on your mod channels."  
         if (ignore_type == "channel"):
-            ignore = ctx.message.channel_mentions[0].id
-            ignore_exists = self.bot.get_channel(int(ignore))
+            ignore_id = ctx.message.channel_mentions[0].id
+            ignore_exists = self.bot.get_channel(int(ignore_id))
         elif (ignore_type == "user"):
-            ignore = ctx.message.mentions[0].id
-            ignore_exists = self.bot.get_user(int(ignore))
+            ignore_id = ctx.message.mentions[0].id
+            ignore_exists = self.bot.get_user(int(ignore_id))
         if (ignore_exists != None):
-            self.tf_database_manager.new_ignore(ctx.guild.id, ignore_type, ignore)
-            await ctx.channel.send("New ignore added: " + str(ignore))
+            self.tf_database_manager.new_ignore(ctx.guild.id, ignore_type, ignore_id)
+            await ctx.channel.send("New ignore added: " + ignore)
             return
         raise(Exception(error))
 
     @commands.command(name="removeIgnore", aliases=["remove_ignore", "unignore"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def removeIgnore(self, ctx, ignore, too_many_arguments=None):
+        """
+        Remove a previous ignore from the database
+        :param ctx: The discord context
+        :param ignore: the ignoreId to be removed
+        :return:
+        """
         if (len(ctx.message.mentions) > 0):
-            ignore = ctx.message.mentions[0].id
+            ignore_id = ctx.message.mentions[0].id
         elif (len(ctx.message.channel_mentions) > 0):
-            ignore = ctx.message.channel_mentions[0].id
-        self.tf_database_manager.remove_ignore(ctx.guild.id, ignore)
+            ignore_id = ctx.message.channel_mentions[0].id
+        else:
+            raise Exception("No ignore mention found")
+        self.tf_database_manager.remove_ignore(ctx.guild.id, ignore_id)
         await ctx.channel.send("Ignore removed: " + str(ignore))
         return
 
     @commands.command(name="removeModChannel", aliases=["remove_mod_channel"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def removeModChannel(self, ctx, channelId, too_many_arguments=None):
         """
         Get a list of filtered words on the current guild.
@@ -158,14 +172,13 @@ class TextFilterCog(commands.Cog):
         raise Exception(error)
 
     @commands.command(name="listModChannels", aliases=["list_mod_channels"])
-    #@commands.check(KoalaBot.is_admin)
+    @commands.check(KoalaBot.is_admin)
     async def listModChannels(self, ctx):
         """
         Get a list of filtered words on the current guild.
         :param ctx: The discord context
         :return:
         """
-
         channels = self.tf_database_manager.get_mod_channel(ctx.guild.id)
         await ctx.channel.send(embed=buildChannelListEmbed(self, ctx, channels))
 
@@ -190,6 +203,11 @@ class TextFilterCog(commands.Cog):
                         return
 
 def isIgnored(self, message):
+    """
+    Checks if the user/channel should be ignored
+    :param message: The newly receievd message
+    :return boolean if should be ignored or not:
+    """
     ignore_list_users = self.tf_database_manager.get_ignore_list_users(message.guild.id)
     ignore_list_channels = self.tf_database_manager.get_ignore_list_channels(message.guild.id)
     return message.channel.id in ignore_list_channels or message.author.id in ignore_list_users
@@ -243,9 +261,6 @@ def getListOfWords(self, ctx):
     """
     all_words, all_types, all_regex = "", "", ""
     for word, filter_type, regex in self.tf_database_manager.get_filtered_text_for_guild(ctx.guild.id):
-        print("word " +word)
-        print("type "+filter_type)
-        print("regex "+regex)
         all_words+=word+"\n"
         all_types+=filter_type+"\n"
         all_regex+=regex+"\n"
@@ -299,7 +314,6 @@ def buildWordListEmbed(ctx, all_words, all_types, all_regex):
     :param all_types: List of all the corresponding filter types for the words in the guild
     :return embed with information about the deleted message:
     """
-    print("test")
     embed = createDefaultEmbed(ctx)
     embed.title = "Koala Moderation - Filtered Words"
     embed.add_field(name="Banned Words", value=all_words)
@@ -354,6 +368,14 @@ def doesWordExist(self, ft_id):
     :return boolean of whether the word exists or not:
     """
     return len(self.database_manager.db_execute_select(f"SELECT * FROM TextFilter WHERE filtered_text_id = (\"{ft_id}\");")) > 0
+
+def doesIgnoreExist(self, ignore_id):
+    """
+    Checks if ignore exists in database given an ID
+    :param ignore_id: ignore id of ignore to be removed
+    :return boolean of whether the ignore exists or not:
+    """
+    return len(self.database_manager.db_execute_select(f"SELECT * FROM TextFilterIgnoreList WHERE ignore_id = (\"{ignore_id}\");")) > 0
 
 class TextFilterDBManager:
     """
@@ -424,23 +446,10 @@ class TextFilterDBManager:
         """
         ft_id = str(guild_id) + filtered_text
         if not doesWordExist(self, ft_id):
-            print(is_regex)
             self.database_manager.db_execute_commit(
                 f"INSERT INTO TextFilter (filtered_text_id, guild_id, filtered_text, filter_type, is_regex) VALUES (\"{ft_id}\", {guild_id}, \"{filtered_text}\", \"{filter_type}\", {is_regex});")
             return 
         raise Exception("Filtered word already exists")
-
-    def new_ignore(self, guild_id, ignore_type, ignore):
-        ignore_id = str(guild_id) + str(ignore)
-        self.database_manager.db_execute_commit(
-            f"INSERT INTO TextFilterIgnoreList (ignore_id, guild_id, ignore_type, ignore) VALUES (\"{ignore_id}\", {guild_id}, \"{ignore_type}\", {ignore});"
-        )
-
-    def remove_ignore(self, guild_id, ignore):
-        ignore_id = str(guild_id) + str(ignore)
-        self.database_manager.db_execute_commit(
-            f"DELETE FROM TextFilterIgnoreList WHERE ignore_id=(\"{ignore_id}\");"
-        )
             
     def unfilter_text(self, guild_id, filtered_text):
         """
@@ -456,6 +465,35 @@ class TextFilterDBManager:
             return
         raise Exception("Filtered word does not exist")
 
+    def new_ignore(self, guild_id, ignore_type, ignore):
+        """
+        Add new ignore to database
+        :param guild_id: Guild ID to associate ignore to
+        :param ignore_type: The type of ignore to add
+        :param ignore: Ignore ID to be added
+        """
+        ignore_id = str(guild_id) + str(ignore)
+        if not doesIgnoreExist(self, ignore_id):
+            self.database_manager.db_execute_commit(
+                f"INSERT INTO TextFilterIgnoreList (ignore_id, guild_id, ignore_type, ignore) VALUES (\"{ignore_id}\", {guild_id}, \"{ignore_type}\", {ignore});"
+            )
+            return
+        raise Exception("Ignore already exists")
+
+    def remove_ignore(self, guild_id, ignore):
+        """
+        Remove ignore from database
+        :param guild_id: The guild_id to delete the ignore from
+        :param ignore: the ignore id to be deleted
+        """
+        ignore_id = str(guild_id) + str(ignore)
+        if doesIgnoreExist(self, ignore_id):
+            self.database_manager.db_execute_commit(
+                f"DELETE FROM TextFilterIgnoreList WHERE ignore_id=(\"{ignore_id}\");"
+            )
+            return
+        raise Exception("Ignore does not exist")
+
     def get_filtered_text_for_guild(self, guild_id):
         """
         Retrieves all filtered words for a specific guild and formats into a nice list of words
@@ -466,7 +504,6 @@ class TextFilterDBManager:
         censor_list = []
         for row in rows:
             censor_list.append((row[2], row[3], str(row[4])))
-        print(censor_list)
         return censor_list
 
     def get_ignore_list_channels(self, guild_id):

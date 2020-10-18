@@ -14,8 +14,11 @@ import mock
 import pytest
 from discord.ext import commands
 
+from discord import Permissions
+
 # Own modules
 import KoalaBot
+#from discord import Permissions
 from cogs import BaseCog
 from cogs import TextFilter
 from tests.utils import TestUtilsCog
@@ -114,6 +117,16 @@ def filteredWordsEmbed(words,filter,regex):
 
 def cleanup(guildId):
      tf_cog.tf_database_manager.database_manager.db_execute_commit(f"DELETE FROM TextFilter WHERE guild_id=(\"{guildId}\");")
+
+# @pytest.mark.asyncio() 
+# async def test_check_admin():
+#     mes = await dpytest.message("Test")
+#     assert mes.author.guild_permissions.administrator == False
+
+#     role = await dpytest.get_config().guilds[0].create_role(name="admin", permissions=Permissions.all())
+#     await  dpytest.get_config().guilds[0].add_roles(mes.author, role)
+
+#     assert mes.author.guild_permissions.administrator == True
 
 @pytest.mark.asyncio()
 async def test_filter_new_word_correct_database():
@@ -375,4 +388,8 @@ async def test_unignore_channel():
     await dpytest.message("ignoreuser")
     assertBannedWarning("ignoreuser")
 
-#todo - fix admin access for commands and tests
+@pytest.fixture(scope='session', autouse=True)
+def setup_is_dpytest():
+    KoalaBot.is_dpytest = True
+    yield
+    KoalaBot.is_dpytest = False
