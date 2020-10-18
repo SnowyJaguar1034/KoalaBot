@@ -507,6 +507,11 @@ class TextFilterDBManager:
         return censor_list
 
     def get_ignore_list_channels(self, guild_id):
+        """
+        Get lists of ignored channels
+        :param guild_id: The guild id to get the list from
+        :return: list of ignored channels
+        """
         rows = self.database_manager.db_execute_select(f"SELECT * FROM TextFilterIgnoreList WHERE guild_id = {guild_id} AND ignore_type = \"channel\" ")
         ilist = []
         for row in rows:
@@ -514,6 +519,11 @@ class TextFilterDBManager:
         return ilist
     
     def get_ignore_list_users(self, guild_id):
+        """
+        Get lists of ignored users
+        :param guild_id: The guild id to get the list from
+        :return: list of ignored users
+        """
         rows = self.database_manager.db_execute_select(f"SELECT * FROM TextFilterIgnoreList WHERE guild_id = {guild_id} AND ignore_type = \"user\" ")
         ilist = []
         for row in rows:

@@ -14,11 +14,8 @@ import mock
 import pytest
 from discord.ext import commands
 
-from discord import Permissions
-
 # Own modules
 import KoalaBot
-#from discord import Permissions
 from cogs import BaseCog
 from cogs import TextFilter
 from tests.utils import TestUtilsCog
@@ -26,16 +23,10 @@ from tests.utils.TestUtils import assert_activity
 from utils import KoalaDBManager
 from utils.KoalaColours import *
 
-# Constants
-
 # Variables
 base_cog = None
 tf_cog = None
 utils_cog =  None
-
-# to-do: Research verify_embed - missing checks on embed content, currently just checks embed structure is correct
-# to-do: test edge cases (empty filtered word, multiple words, etc)
-
 
 def setup_function():
     """ setup any state specific to the execution of the given module."""
@@ -117,16 +108,6 @@ def filteredWordsEmbed(words,filter,regex):
 
 def cleanup(guildId):
      tf_cog.tf_database_manager.database_manager.db_execute_commit(f"DELETE FROM TextFilter WHERE guild_id=(\"{guildId}\");")
-
-# @pytest.mark.asyncio() 
-# async def test_check_admin():
-#     mes = await dpytest.message("Test")
-#     assert mes.author.guild_permissions.administrator == False
-
-#     role = await dpytest.get_config().guilds[0].create_role(name="admin", permissions=Permissions.all())
-#     await  dpytest.get_config().guilds[0].add_roles(mes.author, role)
-
-#     assert mes.author.guild_permissions.administrator == True
 
 @pytest.mark.asyncio()
 async def test_filter_new_word_correct_database():
@@ -347,7 +328,7 @@ async def test_ignore_user():
     assertFilteredConfirmation("ignoreuser","banned")
     assertBannedWarning(KoalaBot.COMMAND_PREFIX +"filter_word ignoreuser")
 
-    # Should deleted and warned
+    # Should be deleted and warned
     await dpytest.message("ignoreuser")
     assertBannedWarning("ignoreuser")
 
@@ -384,7 +365,7 @@ async def test_unignore_channel():
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "unignore " + dpytest.get_config().guilds[0].channels[0].mention)
     assertRemoveIgnore(str(dpytest.get_config().guilds[0].channels[0].id))
 
-    # Should deleted and warned
+    # Should be deleted and warned
     await dpytest.message("ignoreuser")
     assertBannedWarning("ignoreuser")
 
