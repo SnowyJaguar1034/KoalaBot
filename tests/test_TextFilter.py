@@ -311,7 +311,7 @@ async def test_ignore_channel():
     assertBannedWarning(KoalaBot.COMMAND_PREFIX +"filter_word ignoreme")
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "ignore " + channel1.mention + " channel")
-    assertNewIgnore(str(channel1.id))
+    assertNewIgnore(channel1.mention)
 
     # Should be ignored
     await dpytest.message("ignoreme", channel=channel1)
@@ -333,7 +333,7 @@ async def test_ignore_user():
     assertBannedWarning("ignoreuser")
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "ignore " + message.author.mention + " user")
-    assertNewIgnore(str(message.author.id))
+    assertNewIgnore(message.author.mention)
 
     # Should be ignored
     await dpytest.message("ignoreuser")
@@ -357,13 +357,13 @@ async def test_unignore_channel():
     assertBannedWarning(KoalaBot.COMMAND_PREFIX +"filter_word ignoreuser")
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "ignore " + dpytest.get_config().guilds[0].channels[0].mention + " channel")
-    assertNewIgnore(str(dpytest.get_config().guilds[0].channels[0].id))
+    assertNewIgnore(dpytest.get_config().guilds[0].channels[0].mention)
 
     # Should be ignored
     await dpytest.message("ignoreuser")
 
     await dpytest.message(KoalaBot.COMMAND_PREFIX + "unignore " + dpytest.get_config().guilds[0].channels[0].mention)
-    assertRemoveIgnore(str(dpytest.get_config().guilds[0].channels[0].id))
+    assertRemoveIgnore(dpytest.get_config().guilds[0].channels[0].mention)
 
     # Should be deleted and warned
     await dpytest.message("ignoreuser")
